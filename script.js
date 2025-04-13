@@ -82,30 +82,38 @@ document.addEventListener('DOMContentLoaded', () => {
         const containerHeight = gameContainer.clientHeight;
 
         // Maintain aspect ratio (e.g., 16:9)
-        const aspectRatio = 16 / 9;
-        let newWidth, newHeight;
+        // const aspectRatio = 16 / 9;
+        // let newWidth, newHeight;
 
-        if (containerWidth / containerHeight > aspectRatio) {
-            // Container is wider than aspect ratio, height is the limiting factor
-            newHeight = containerHeight;
-            newWidth = newHeight * aspectRatio;
-        } else {
-            // Container is taller or equal, width is the limiting factor
-            newWidth = containerWidth;
-            newHeight = newWidth / aspectRatio;
-        }
+        // if (containerWidth / containerHeight > aspectRatio) {
+        //     // Container is wider than aspect ratio, height is the limiting factor
+        //     newHeight = containerHeight;
+        //     newWidth = newHeight * aspectRatio;
+        // } else {
+        //     // Container is taller or equal, width is the limiting factor
+        //     newWidth = containerWidth;
+        //     newHeight = newWidth / aspectRatio;
+        // }
 
-        canvas.width = newWidth;
-        canvas.height = newHeight;
+        // canvas.width = newWidth;
+        // canvas.height = newHeight;
+
+        // --- NEW LOGIC: Fill the container ---
+        canvas.width = containerWidth;
+        canvas.height = containerHeight;
+        // --- END NEW LOGIC ---
 
         // Recalculate fixed player position based on new canvas size
         player.x = canvas.width * PLAYER_FIXED_X_PERCENT;
         player.y = canvas.height * PLAYER_FIXED_Y_PERCENT;
 
-        // Adjust terrain generation if needed based on resize
-        // (e.g., ensure enough points cover the new width)
-        initializeTerrain(); // Re-init terrain on resize might be simplest
-        verticalBias = canvas.height * TERRAIN_INITIAL_SAFE_FACTOR; // Reset bias safely
+        // Re-initialize terrain to adapt to potentially very different dimensions
+        initializeTerrain();
+        // Recalculate initial bias based on new height
+        const baseLineY = canvas.height / 2;
+        const targetAbsoluteStartY = canvas.height * TERRAIN_INITIAL_SAFE_FACTOR;
+        const initialRelativeY = 0;
+        verticalBias = targetAbsoluteStartY - baseLineY - initialRelativeY;
         verticalBiasTarget = verticalBias;
 
         console.log(`Resized canvas to: ${canvas.width}x${canvas.height}`);
@@ -256,6 +264,25 @@ document.addEventListener('DOMContentLoaded', () => {
         updateDebugInfo();
     };
 
+    const enterFullscreen = () => {
+        const element = gameContainer; // Or document.documentElement for whole page
+    
+        if (element.requestFullscreen) {
+            element.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+            });
+        } else if (element.webkitRequestFullscreen) { /* Safari */
+            element.webkitRequestFullscreen().catch(err => {
+                 console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+            });
+        } else if (element.msRequestFullscreen) { /* IE11 */
+            element.msRequestFullscreen().catch(err => {
+                 console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+            });
+        }
+         // Note: You might want to add a button/mechanism to exit fullscreen later
+         // using document.exitFullscreen() etc.
+    };
 
     const showFallbackControls = () => {
         if (isMobile) {
@@ -474,7 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Return only the collision status
         return collision;
     };
-    
+
     // --- Scoring ---
     const updateScore = (deltaTime) => {
         if (distanceToTerrain >= 0 && distanceToTerrain <= MAX_SCORING_DISTANCE) {
@@ -785,7 +812,13 @@ Sensors:\n ${sensorData}
          }
 
         // Add event listeners
-        startButton.addEventListener('click', startGame);
+        // Modify the startButton listener to also request fullscreen
+        startButton.addEventListener('click', () => {
+            // Request fullscreen first (optional, but often good UX)
+            enterFullscreen();
+            // Then start the game
+            startGame();
+        });
         permissionButton.addEventListener('click', requestSensorPermission);
         resumeButton.addEventListener('click', togglePause); // Resume is just toggling pause off
         restartButton.addEventListener('click', () => {

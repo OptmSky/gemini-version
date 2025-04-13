@@ -14,12 +14,14 @@ body {
 #game-container {
     position: relative;
     width: 100%;
-    max-width: 1000px; /* Max width for desktop */
-    aspect-ratio: 16 / 9; /* Maintain aspect ratio */
+    /* max-width: 1000px; */ /* Consider removing max-width too for better portrait filling */
+    /* aspect-ratio: 16 / 9; */ /* REMOVE OR COMMENT OUT THIS LINE */
+    height: 100vh; /* Make container fill viewport height */
+    max-height: 100vh; /* Ensure it doesn't exceed viewport */
     background-color: #000;
-    overflow: hidden; /* Clip contents to container */
+    overflow: hidden;
     border: 1px solid #555;
-    display: flex; /* Use flex to center canvas if needed */
+    display: flex;
     justify-content: center;
     align-items: center;
 }
@@ -224,4 +226,52 @@ canvas {
 #game-container.sensors-denied #touch-controls,
 #game-container.sensors-unavailable #touch-controls {
     display: flex; /* Ensure touch controls show if sensors fail/denied */
+}
+
+/* Existing .overlay button style might be too general */
+/* Let's make start screen buttons more specific */
+#start-screen button {
+    padding: 8px 15px; /* Slightly smaller padding */
+    font-size: clamp(13px, 3.5vw, 18px); /* Slightly smaller font */
+    margin-top: 8px; /* Reduce space between buttons */
+    margin-bottom: 5px;
+    cursor: pointer;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    max-width: 80%; /* Prevent buttons from becoming excessively wide */
+    width: auto; /* Allow button to size to content */
+    display: block; /* Ensure they stack correctly */
+    margin-left: auto; /* Center buttons if needed */
+    margin-right: auto;
+}
+
+#start-screen button:hover {
+    background-color: #45a049;
+}
+
+/* Optional: Media query for very narrow screens */
+@media (max-width: 400px) {
+     #start-screen p, #start-screen li {
+          font-size: clamp(11px, 3vw, 14px); /* Even smaller text */
+     }
+      #start-screen button {
+            padding: 6px 12px;
+            font-size: clamp(12px, 3.2vw, 16px);
+      }
+}
+
+/* Optional: Media query specifically for portrait */
+@media (orientation: portrait) and (max-height: 500px) {
+     /* Styles for short portrait screens if needed */
+      #start-screen h1 {
+            margin-bottom: 5px;
+      }
+       #start-screen p {
+            margin-bottom: 5px;
+       }
+       #start-screen button {
+            margin-top: 5px;
+       }
 }
