@@ -50,12 +50,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const NEUTRAL_TILT_ANGLE_LANDSCAPE = 0.0;  // Neutral angle (degrees) when phone held horizontally (uses roll/gamma) - Usually 0 is fine for roll.
     const MAX_TILT_DEVIATION = 30.0; // Max degrees deviation FROM NEUTRAL angle to reach full effect (-1 to 1 normalized)
     const WARNING_TIME_SECONDS = 10; // When to show time warning
+    const INITIAL_SAFE_DURATION_SECONDS = 3.0; // How many seconds of smooth terrain at start
 
     // --- Game State Variables ---
     let score = 0;
     let timeLeft = TIME_LIMIT_SECONDS;
     let distanceToTerrain = Infinity;
     let closestTerrainPoint = { x: 0, y: 0 }; // For visual indicator line
+    let gameTimeElapsed = 0; // <<< ADD THIS LINE
 
     let isRunning = false;
     let isPaused = false;
@@ -371,33 +373,44 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateTerrain = (deltaTime) => {
         let pointsToRemove = 0;
         let lastX = terrainPoints.length > 0 ? terrainPoints[terrainPoints.length - 1].x : -TERRAIN_SEGMENT_WIDTH;
-        // Get the last Y *relative* to the baseline
-        let lastRelativeY = terrainPoints.length > 0 ? terrainPoints[terrainPoints.length - 1].y : 0; // Default to 0 relative Y
-
-        // Move existing points left
+        let lastRelativeY = terrainPoints.length > 0 ? terrainPoints[terrainPoints.length - 1].y : 0;
+    
+        // Move existing points left (using deltaTime for consistent speed)
+        const speedAdjustment = deltaTime / (1000 / 60); // Adjust speed based on 60fps baseline
         for (let i = 0; i < terrainPoints.length; i++) {
-            terrainPoints[i].x -= terrainSpeed * (deltaTime / (1000 / 60)); // Adjust speed based on deltaTime
-            if (terrainPoints[i].x < -TERRAIN_SEGMENT_WIDTH * 2) { // Remove points well off-screen
+            terrainPoints[i].x -= terrainSpeed * speedAdjustment; // Apply adjusted speed
+            if (terrainPoints[i].x < -TERRAIN_SEGMENT_WIDTH * 2) {
                 pointsToRemove++;
             }
         }
-
-        // Remove points from the beginning of the array
         if (pointsToRemove > 0) {
             terrainPoints.splice(0, pointsToRemove);
         }
-
+    
+        // --- Determine terrain roughness based on time ---
+        let effectiveRoughness = TERRAIN_ROUGHNESS;
+        if (gameTimeElapsed < INITIAL_SAFE_DURATION_SECONDS) {
+            // Option 1: Completely flat during safe period
+            effectiveRoughness = 0;
+            // Option 2: Very low roughness during safe period ( uncomment if preferred)
+            // effectiveRoughness = TERRAIN_ROUGHNESS * 0.1;
+            // Option 3: Gradually increase roughness (uncomment if preferred)
+            // effectiveRoughness = TERRAIN_ROUGHNESS * (gameTimeElapsed / INITIAL_SAFE_DURATION_SECONDS);
+    
+            // Optional: Log during safe phase for debugging
+            // console.log(`Safe Phase: Time=${gameTimeElapsed.toFixed(1)}, Roughness=${effectiveRoughness.toFixed(1)}`);
+        }
+        // --- End roughness determination ---
+    
         // Add new points on the right edge
-        while (lastX < canvas.width + TERRAIN_SEGMENT_WIDTH * 2) { // Generate points beyond the right edge
+        while (lastX < canvas.width + TERRAIN_SEGMENT_WIDTH * 2) {
              lastX += TERRAIN_SEGMENT_WIDTH;
-
-             // Generate Y relative to 0 (which represents the canvas.height / 2 baseline)
-             let randomComponent = (Math.random() - 0.5) * TERRAIN_ROUGHNESS;
-             // Smooth component uses the *relative* last Y, tending towards 0 (the baseline)
+    
+             // Calculate Y components using EFFECTIVE roughness
+             let randomComponent = (Math.random() - 0.5) * effectiveRoughness; // <<< USE effectiveRoughness
              let smoothComponent = lastRelativeY * (1 - TERRAIN_SMOOTHNESS);
-
-             let nextRelativeY = smoothComponent + randomComponent; // Store this RELATIVE value
-
+             let nextRelativeY = smoothComponent + randomComponent;
+    
              terrainPoints.push({ x: lastX, y: nextRelativeY });
              lastRelativeY = nextRelativeY;
         }
@@ -469,10 +482,9 @@ document.addEventListener('DOMContentLoaded', () => {
              closestTerrainPoint = {x: player.x, y: canvas.height + 10};
         }
     
-        // Add the corrected console log here:
-        // Check if terrainYAtPlayerX was updated from its default; log only if relevant calculation happened.
         if (terrainYAtPlayerX !== canvas.height || distanceToTerrain !== canvas.height) {
-             console.log(`Dist Calc: PlayerY=<span class="math-inline">\{player\.y\.toFixed\(1\)\}, TerrainY\=</span>{terrainYAtPlayerX.toFixed(1)}, VertDist=<span class="math-inline">\{\(player\.y \- terrainYAtPlayerX\)\.toFixed\(1\)\}, StoredDist\=</span>{distanceToTerrain.toFixed(1)}`);
+            // Correct format:
+            console.log(`Dist Calc: PlayerY=<span class="math-inline">\{player\.y\.toFixed\(1\)\}, TerrainY\=</span>{terrainYAtPlayerX.toFixed(1)}, VertDist=<span class="math-inline">\{\(player\.y \- terrainYAtPlayerX\)\.toFixed\(1\)\}, StoredDist\=</span>{distanceToTerrain.toFixed(1)}`);
         }
     
         // Update UI display - always show non-negative distance
@@ -511,6 +523,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resizeCanvas(); // Ensure canvas is sized correctly before starting
         initializeTerrain(); // Set up initial safe terrain
 
+        gameTimeElapsed = 0; // Reset elapsed time counter
         score = 0;
         timeLeft = TIME_LIMIT_SECONDS;
         isGameOver = false;
@@ -537,7 +550,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             hideFallbackControls(); // Hide touch if sensors are active
         }
-
 
         // Start timer interval
         clearInterval(timerIntervalId); // Clear any previous interval
@@ -734,6 +746,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // Modify the update function signature to accept deltaTime
+    const update = (deltaTime) => { // <<< ACCEPT deltaTime HERE
+        if (!isRunning || !isPaused) { // Make sure time doesn't advance unless running and not paused
+            // Accumulate elapsed time in seconds
+            gameTimeElapsed += deltaTime / 1000;
+
+            // Process input, update terrain (pass deltaTime if needed for speed), etc.
+            processInput();
+            updateTerrain(deltaTime); // Pass deltaTime for consistent movement speed
+            const collisionDetected = calculateDistanceAndCollision();
+            if (collisionDetected) {
+                gameOver("Collision!");
+                return;
+            }
+            updateScore(deltaTime);
+
+            // Update UI timer (still uses interval, but could be moved here too)
+        }
+        // NOTE: The original timer logic uses setInterval. Keep it for simplicity,
+        // but be aware gameTimeElapsed is a more precise measure of active play time.
+    };
+
     const toggleDebugPanel = () => {
         if (debugPanel.style.display === 'none') {
             debugPanel.style.display = 'block';
@@ -746,43 +780,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- Game Loop ---
-    const gameLoop = (timestamp) => {
-        const deltaTime = timestamp - lastTimestamp;
-        lastTimestamp = timestamp;
+// --- Game Loop ---
+const gameLoop = (timestamp) => {
+    const deltaTime = timestamp - lastTimestamp;
+    lastTimestamp = timestamp;
 
-        if (!isRunning) {
-             console.log("Game loop stopped (not running).");
-             return; // Stop loop if game ended
-        }
-        if (isPaused) {
-            console.log("Game loop skipped (paused).");
-             animationFrameId = requestAnimationFrame(gameLoop); // Still request frame to keep checking pause state
-             return; // Skip updates and drawing if paused
-        }
+    if (!isRunning) { console.log("Game loop stopped."); return; } // Simplified exit condition log
+    if (isPaused) { console.log("Game loop paused."); animationFrameId = requestAnimationFrame(gameLoop); return; } // Simplified pause log
 
-        // --- Update ---
-        processInput(); // Read input and update verticalBiasTarget
-        updateTerrain(deltaTime); // Move terrain, generate new points
-        const collisionDetected = calculateDistanceAndCollision(); // Find distance, check collision
-        if (collisionDetected) {
-            gameOver("Collision!");
-            return; // Stop processing this frame
-        }
-        updateScore(deltaTime); // Update score based on distance
+    // --- Update ---
+    update(deltaTime); // <<< CALL UPDATE ONCE HERE
 
-        // --- Draw ---
-        ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
-        drawTerrain();
-        drawPlayer();
-        drawDistanceIndicator();
+    // --- DELETE THE FOLLOWING DUPLICATED LINES ---
+    // processInput(); // DELETE
+    // updateTerrain(deltaTime); // DELETE
+    // const collisionDetected = calculateDistanceAndCollision(); // DELETE
+    // if (collisionDetected) { // DELETE
+    //     gameOver("Collision!"); // DELETE
+    //     return; // DELETE
+    // } // DELETE
+    // updateScore(deltaTime); // DELETE
+    // --- END DELETION ---
 
-        // --- Debug --- (Update after drawing calculations)
-        updateDebugInfo();
+    // --- Draw ---
+    ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+    drawTerrain();
+    drawPlayer();
+    drawDistanceIndicator();
 
+    // --- Debug --- (Update after drawing calculations)
+    // Make sure updateDebugInfo doesn't rely on variables only set in the duplicated logic block
+    // It should be okay as update() sets the necessary state variables like distanceToTerrain etc.
+     updateDebugInfo(); // Pass necessary args if you kept that modification
 
-        // Request next frame
-        animationFrameId = requestAnimationFrame(gameLoop);
-    };
+    // Request next frame
+    animationFrameId = requestAnimationFrame(gameLoop);
+};
 
 
     // --- Initialization ---
