@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Terrain Skimmer</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        // if (location.protocol !== 'https:') {
+        //     // Optional: Redirect to HTTPS if not already secure
+        //     // location.replace(`https:${location.href.substring(location.protocol.length)}`);
+        //     console.warn("Device sensors require a secure (HTTPS) connection.");
+        // }
+    </script>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="ui-layer">
+            <div id="stats">
+                <span>Score: <span id="score">0</span> / <span id="targetScore">1000</span></span>
+                <span>Time: <span id="timer">60</span>s</span>
+                <span>Distance: <span id="distance">---</span>px</span>
+            </div>
+            <div id="progress-bar-container">
+                <div id="progress-bar"></div>
+            </div>
+            <div id="time-warning">Time running low!</div>
+        </div>
+
+        <div id="start-screen" class="overlay">
+            <h1>Terrain Skimmer</h1>
+            <p>Fly close to the terrain to score points. Reach 1000 points in 60 seconds!</p>
+            <p>Controls:</p>
+            <ul>
+                <li>Desktop: UP/DOWN Arrows or W/S keys</li>
+                <li>Mobile: Tilt device (if sensors enabled) or On-screen Buttons</li>
+            </ul>
+            <button id="start-button">Start Game</button>
+            <button id="permission-button">Enable Tilt Controls</button>
+            <p id="sensor-status">Sensor Status: Inactive</p>
+        </div>
+
+        <div id="pause-screen" class="overlay" style="display: none;">
+            <h2>Paused</h2>
+            <button id="resume-button">Resume</button>
+        </div>
+
+        <div id="game-over-screen" class="overlay" style="display: none;">
+            <h2 id="game-over-message">Game Over!</h2>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <button id="restart-button">Restart</button>
+        </div>
+
+        <div id="touch-controls" style="display: none;">
+            <button id="touch-up">▲</button>
+            <button id="touch-down">▼</button>
+        </div>
+
+        <div id="debug-panel" style="display: none;">
+            <h3>Debug Info</h3>
+            <pre id="debug-output"></pre>
+            <button id="toggle-debug">Hide Debug</button>
+        </div>
+        <button id="show-debug-button" style="position: absolute; bottom: 5px; right: 5px; z-index: 100;">Debug</button>
+
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

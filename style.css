@@ -1,0 +1,227 @@
+body {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #222;
+    color: #fff;
+    font-family: sans-serif;
+    overflow: hidden; /* Prevent scrollbars */
+}
+
+#game-container {
+    position: relative;
+    width: 100%;
+    max-width: 1000px; /* Max width for desktop */
+    aspect-ratio: 16 / 9; /* Maintain aspect ratio */
+    background-color: #000;
+    overflow: hidden; /* Clip contents to container */
+    border: 1px solid #555;
+    display: flex; /* Use flex to center canvas if needed */
+    justify-content: center;
+    align-items: center;
+}
+
+canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background-color: #345678; /* Sky color */
+}
+
+#ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+    z-index: 10;
+    color: white;
+    text-shadow: 1px 1px 2px black;
+    pointer-events: none; /* Allow clicks through UI layer to canvas/buttons below */
+}
+
+#stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: clamp(12px, 3vw, 18px); /* Responsive font size */
+}
+
+#progress-bar-container {
+    width: 100%;
+    height: 10px;
+    background-color: #555;
+    border-radius: 5px;
+    margin-top: 5px;
+    overflow: hidden;
+}
+
+#progress-bar {
+    width: 0%;
+    height: 100%;
+    background-color: #4CAF50;
+    border-radius: 5px;
+    transition: width 0.2s ease-out;
+}
+
+#time-warning {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: red;
+    font-size: clamp(20px, 5vw, 30px);
+    font-weight: bold;
+    display: none; /* Hidden by default */
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    50% { opacity: 0; }
+}
+
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    z-index: 20;
+    padding: 20px;
+    box-sizing: border-box;
+    color: white;
+}
+
+.overlay h1 {
+    font-size: clamp(24px, 6vw, 40px);
+    margin-bottom: 15px;
+}
+.overlay h2 {
+    font-size: clamp(20px, 5vw, 36px);
+    margin-bottom: 15px;
+}
+.overlay p {
+    font-size: clamp(14px, 3.5vw, 20px);
+    margin-bottom: 10px;
+    max-width: 80%;
+}
+.overlay ul {
+    list-style: none;
+    padding: 0;
+    margin-bottom: 20px;
+}
+.overlay li {
+     margin-bottom: 5px;
+     font-size: clamp(12px, 3vw, 18px);
+}
+.overlay button {
+    padding: 10px 20px;
+    font-size: clamp(14px, 4vw, 20px);
+    margin-top: 10px;
+    cursor: pointer;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+}
+.overlay button:hover {
+    background-color: #45a049;
+}
+
+#sensor-status {
+    margin-top: 15px;
+    font-size: clamp(12px, 3vw, 16px);
+    font-style: italic;
+}
+
+#touch-controls {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: auto; /* Enable clicks on touch controls */
+}
+
+#touch-controls button {
+    width: 60px;
+    height: 60px;
+    font-size: 24px;
+    background-color: rgba(100, 100, 100, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    color: white;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex; /* Center icon */
+    justify-content: center;
+    align-items: center;
+}
+
+#debug-panel {
+    position: absolute;
+    top: 50px;
+    right: 10px;
+    width: 250px;
+    max-height: 70%;
+    background-color: rgba(0, 0, 0, 0.85);
+    color: #0f0;
+    font-family: monospace;
+    font-size: 12px;
+    padding: 10px;
+    border: 1px solid #0f0;
+    z-index: 50;
+    overflow-y: auto;
+    box-sizing: border-box;
+    pointer-events: auto; /* Allow interaction */
+}
+#debug-panel h3 {
+    margin: 0 0 10px 0;
+    color: #0f0;
+    font-size: 14px;
+}
+#debug-panel pre {
+    margin: 0;
+    white-space: pre-wrap; /* Wrap long lines */
+    word-wrap: break-word; /* Break words */
+}
+#debug-panel button {
+    background: #555;
+    color: white;
+    border: none;
+    padding: 5px;
+    cursor: pointer;
+    margin-top: 10px;
+    font-size: 10px;
+}
+
+/* Hide elements initially or by state */
+#game-container:not(.mobile) #touch-controls {
+    display: none;
+}
+#game-container.mobile #permission-button {
+    display: inline-block; /* Show permission button only if potentially mobile */
+}
+#game-container:not(.mobile) #permission-button {
+     display: none; /* Hide permission button on desktop */
+}
+#game-container.sensors-active #touch-controls {
+    display: none; /* Hide touch if sensors are active */
+}
+#game-container.sensors-denied #permission-button {
+    display: none; /* Hide if permanently denied */
+}
+#game-container.sensors-denied #touch-controls,
+#game-container.sensors-unavailable #touch-controls {
+    display: flex; /* Ensure touch controls show if sensors fail/denied */
+}
