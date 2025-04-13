@@ -46,6 +46,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const TERRAIN_INITIAL_SAFE_FACTOR = 0.6// Start terrain ~1.8x screen height down
     const CONTROL_SENSITIVITY = 1.5; // How much keys/tilt affect terrain bias
     const TILT_SENSITIVITY_MULTIPLIER = 0.15; // Adjusts tilt responsiveness
+    const NEUTRAL_TILT_ANGLE_PORTRAIT = 45.0; // Neutral angle (degrees) when phone held vertically (uses pitch/beta)
+    const NEUTRAL_TILT_ANGLE_LANDSCAPE = 0.0;  // Neutral angle (degrees) when phone held horizontally (uses roll/gamma) - Usually 0 is fine for roll.
+    const MAX_TILT_DEVIATION = 30.0; // Max degrees deviation FROM NEUTRAL angle to reach full effect (-1 to 1 normalized)
     const WARNING_TIME_SECONDS = 10; // When to show time warning
 
     // --- Game State Variables ---
@@ -210,58 +213,35 @@ document.addEventListener('DOMContentLoaded', () => {
         // gamma: left/right tilt (usually -90 to 90)
         // alpha: compass direction (0 to 360)
 
-        // Determine primary tilt axis based on orientation (simple check)
-        const isLandscape = window.innerWidth > window.innerHeight;
-        let tiltValue = isLandscape ? event.gamma : event.beta; // Use roll in landscape, pitch in portrait
+        // Determine orientation based on canvas aspect ratio
+        const isLandscape = canvas.width > canvas.height;
+        let tiltValue = isLandscape ? event.gamma : event.beta; // Get raw tilt value
+        // Select the appropriate neutral angle based on orientation
+        let neutralAngle = isLandscape ? NEUTRAL_TILT_ANGLE_LANDSCAPE : NEUTRAL_TILT_ANGLE_PORTRAIT;
 
         if (tiltValue === null || tiltValue === undefined) {
             console.warn("Received null/undefined tilt value.");
             return;
         }
 
-        // Normalize tilt value (e.g., map -30 to 30 degrees to -1 to 1)
-        const maxTilt = 30; // degrees
-        const normalizedTilt = Math.max(-1, Math.min(1, tiltValue / maxTilt));
+        // --- NEW: Calculate tilt relative to the desired neutral angle ---
+        let adjustedTiltValue = tiltValue - neutralAngle;
+        // --- END NEW ---
 
-        // === TILT CONTROL INVERSION ===
-        // Map normalized tilt to vertical bias change
-        // Tilting phone UP (positive normalizedTilt) should make terrain move DOWN (increase bias)
-        // Tilting phone DOWN (negative normalizedTilt) should make terrain move UP (decrease bias)
+        // Normalize the *adjusted* tilt value based on max deviation from neutral
+        // e.g., map (-MAX_TILT_DEVIATION to +MAX_TILT_DEVIATION) -> (-1 to 1)
+        const normalizedTilt = Math.max(-1, Math.min(1, adjustedTiltValue / MAX_TILT_DEVIATION));
 
-        // Previous logic: verticalBiasTarget = canvas.height / 2 - normalizedTilt * ...
-        // New logic: We adjust the *current* bias target based on tilt.
-        // Let's calculate a target offset based on tilt and apply it relative to the neutral position (mid-screen baseline).
+        // Calculate the desired bias offset based on the normalized deviation from neutral
+        // Positive normalizedTilt (tilted "up" from neutral) should increase bias (terrain moves down).
         const tiltInfluence = normalizedTilt * (canvas.height * 0.4) * TILT_SENSITIVITY_MULTIPLIER;
 
-        // The target bias should be around the initial bias + the tilt influence.
-        // Or more simply, calculate the target relative to the current bias?
-        // Let's directly set the target based on the neutral baseline + tilt effect.
-        // We need to consider the *initial* bias established in initializeTerrain. Let the baseline be the desired center for generated points (0 relative Y).
-        const neutralBaselineBias = 0; // This might need adjustment if the initial bias wasn't centered. Let's assume 0 is the 'neutral' desired bias offset.
+        // Set the target bias directly based on the calculated influence.
+        // When tilt is neutral, adjusted=0, normalized=0, influence=0, so target bias becomes 0.
+        verticalBiasTarget = tiltInfluence;
 
-        // Target bias = neutral + influence. Tilting UP (positive normTilt) increases target bias -> terrain DOWN.
-        // verticalBiasTarget = neutralBaselineBias + tiltInfluence; // This might cause sudden jumps if neutralBaselineBias is far from current bias.
-
-        // Better approach: Adjust the *current* target based on tilt smoothly.
-        // Let's try mapping tilt directly to the target bias relative to the screen center.
-        // If tilt up (positive normTilt), we want higher bias target.
-        verticalBiasTarget = 0 + tiltInfluence; // Target bias centers around 0 + tilt effect. Adjust '0' if neutral isn't center screen.
-
-        // *** SIMPLER INVERSION ***: Just flip the sign in the original calculation line
-        // verticalBiasTarget = canvas.height / 2 + normalizedTilt * (canvas.height * 0.4) * TILT_SENSITIVITY_MULTIPLIER; // WAS: minus normalizedTilt
-        // Let's use this simpler one. It ties the bias target directly to the screen center plus tilt offset.
-        // NOTE: This assumes canvas.height/2 is the absolute Y where bias = 0 corresponds to. Our relative system means bias=0 puts terrain points around canvas.height/2. This should work.
-
-        verticalBiasTarget = canvas.height / 2 + normalizedTilt * (canvas.height * 0.4) * TILT_SENSITIVITY_MULTIPLIER;
-
-
-        // === END TILT CONTROL INVERSION ===
-
-
-        // Clamp the target? Maybe do it in processInput or after lerp. Let's skip clamping here for now.
-
-        lastBeta = event.beta; // Store for debugging/potential future use
-        updateDebugInfo();
+        // Update debug info if needed (passing the new values)
+        updateDebugInfo(adjustedTiltValue, normalizedTilt);
     };
 
     const enterFullscreen = () => {
@@ -716,31 +696,41 @@ document.addEventListener('DOMContentLoaded', () => {
      };
 
     // --- Debugging ---
-    const updateDebugInfo = () => {
+    const updateDebugInfo = (adjustedTilt = null, normalizedTilt = null) => {
         if (debugPanel.style.display !== 'none') {
             let sensorData = 'N/A';
             if (sensorsActive) {
-                 sensorData = `Permission: ${sensorPermissionGranted}\nActive: ${sensorsActive}\nBeta (Pitch): ${lastBeta !== null ? lastBeta.toFixed(2) : 'N/A'}\nGamma (Roll): ${window.orientationEventData ? window.orientationEventData.gamma.toFixed(2) : 'N/A'}`;
+                // Keep existing beta display or add gamma if needed
+                sensorData = `Permission: ${sensorPermissionGranted}\nActive: ${sensorsActive}\nBeta (Pitch): ${event?.beta?.toFixed(2) ?? 'N/A'}\nGamma (Roll): ${event?.gamma?.toFixed(2) ?? 'N/A'}`; // Use optional chaining safely
+
+                // Add the new debug info
+                if (adjustedTilt !== null) {
+                    sensorData += `\nAdjusted Tilt: ${adjustedTilt.toFixed(2)}`;
+                }
+                if (normalizedTilt !== null) {
+                    sensorData += `\nNormalized Tilt: ${normalizedTilt.toFixed(2)}`;
+                }
             } else {
-                 sensorData = `Permission: ${sensorPermissionGranted}\nActive: ${sensorsActive}\nStatus: ${sensorStatusDisplay.textContent}`;
+                sensorData = `Permission: ${sensorPermissionGranted}\nActive: ${sensorsActive}\nStatus: ${sensorStatusDisplay.textContent}`;
             }
 
+            // The rest of the text content assignment remains the same...
             debugOutput.textContent = `
-Timestamp: ${performance.now().toFixed(0)}
-Player X: ${player.x.toFixed(1)}, Y: ${player.y.toFixed(1)}
-Terrain Points: ${terrainPoints.length}
-Vertical Bias: ${verticalBias.toFixed(1)}
-Bias Target: ${verticalBiasTarget.toFixed(1)}
-Distance: ${distanceToTerrain.toFixed(1)}
-Closest Terrain Pt: (${closestTerrainPoint.x.toFixed(1)}, ${closestTerrainPoint.y.toFixed(1)})
-Score: ${score.toFixed(1)}
-Time Left: ${timeLeft}
-State: Running=${isRunning}, Paused=${isPaused}, GameOver=${isGameOver}, Won=${hasWon}
-Keys: ${JSON.stringify(keysPressed)}
-Screen: ${canvas.width}x${canvas.height}
-Mobile: ${isMobile}
-Sensors:\n ${sensorData}
-`;
+    Timestamp: ${performance.now().toFixed(0)}
+    Player X: ${player.x.toFixed(1)}, Y: ${player.y.toFixed(1)}
+    Terrain Points: ${terrainPoints.length}
+    Vertical Bias: ${verticalBias.toFixed(1)}
+    Bias Target: ${verticalBiasTarget.toFixed(1)}
+    Distance: ${distanceToTerrain.toFixed(1)}
+    Closest Terrain Pt: (${closestTerrainPoint.x.toFixed(1)}, ${closestTerrainPoint.y.toFixed(1)})
+    Score: ${score.toFixed(1)}
+    Time Left: ${timeLeft}
+    State: Running=${isRunning}, Paused=${isPaused}, GameOver=${isGameOver}, Won=${hasWon}
+    Keys: ${JSON.stringify(keysPressed)}
+    Screen: ${canvas.width}x${canvas.height}
+    Mobile: ${isMobile}
+    Sensors:\n ${sensorData}
+    `;
         }
     };
 
