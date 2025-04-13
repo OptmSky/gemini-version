@@ -39,16 +39,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const PLAYER_FIXED_Y_PERCENT = 0.50; // 50% from top
     const MAX_SCORING_DISTANCE = 100; // Max distance in pixels to score points
     const POINTS_PER_SECOND_AT_MIN_DIST = 50; // Score rate when extremely close
-    const TERRAIN_SEGMENT_WIDTH = 20; // Width of each terrain segment
-    const TERRAIN_BASE_SPEED = 2; // Pixels per frame base speed
-    const TERRAIN_SMOOTHNESS = 0.1; // How much adjacent points influence each other
-    const TERRAIN_ROUGHNESS = 50; // Max vertical change between segments
-    const TERRAIN_INITIAL_SAFE_FACTOR = 0.6// Start terrain ~1.8x screen height down
-    const CONTROL_SENSITIVITY = 1.5; // How much keys/tilt affect terrain bias
-    const TILT_SENSITIVITY_MULTIPLIER = 0.25; // Adjusts tilt responsiveness
-    const NEUTRAL_TILT_ANGLE_PORTRAIT = 45.0; // Neutral angle (degrees) when phone held vertically (uses pitch/beta)
-    const NEUTRAL_TILT_ANGLE_LANDSCAPE = 0.0;  // Neutral angle (degrees) when phone held horizontally (uses roll/gamma) - Usually 0 is fine for roll.
-    const MAX_TILT_DEVIATION = 30.0; // Max degrees deviation FROM NEUTRAL angle to reach full effect (-1 to 1 normalized)
+    let TERRAIN_SEGMENT_WIDTH = 20; // Width of each terrain segment
+    let TERRAIN_BASE_SPEED = 2; // Pixels per frame base speed
+    let TERRAIN_SMOOTHNESS = 0.1; // How much adjacent points influence each other
+    let TERRAIN_ROUGHNESS = 50; // Max vertical change between segments
+    let TERRAIN_INITIAL_SAFE_FACTOR = 0.6// Start terrain ~1.8x screen height down
+    let CONTROL_SENSITIVITY = 1.5; // How much keys/tilt affect terrain bias
+    let TILT_SENSITIVITY_MULTIPLIER = 0.25; // Adjusts tilt responsiveness
+    let NEUTRAL_TILT_ANGLE_PORTRAIT = 45.0; // Neutral angle (degrees) when phone held vertically (uses pitch/beta)
+    let NEUTRAL_TILT_ANGLE_LANDSCAPE = 0.0;  // Neutral angle (degrees) when phone held horizontally (uses roll/gamma) - Usually 0 is fine for roll.
+    let MAX_TILT_DEVIATION = 45.0; // Max degrees deviation FROM NEUTRAL angle to reach full effect (-1 to 1 normalized)
     const WARNING_TIME_SECONDS = 10; // When to show time warning
     const INITIAL_SAFE_DURATION_SECONDS = 3.0; // How many seconds of smooth terrain at start
 
@@ -780,43 +780,85 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- Game Loop ---
-// --- Game Loop ---
-const gameLoop = (timestamp) => {
-    const deltaTime = timestamp - lastTimestamp;
-    lastTimestamp = timestamp;
+    const gameLoop = (timestamp) => {
+        const deltaTime = timestamp - lastTimestamp;
+        lastTimestamp = timestamp;
 
-    if (!isRunning) { console.log("Game loop stopped."); return; } // Simplified exit condition log
-    if (isPaused) { console.log("Game loop paused."); animationFrameId = requestAnimationFrame(gameLoop); return; } // Simplified pause log
+        if (!isRunning) { console.log("Game loop stopped."); return; } // Simplified exit condition log
+        if (isPaused) { console.log("Game loop paused."); animationFrameId = requestAnimationFrame(gameLoop); return; } // Simplified pause log
 
-    // --- Update ---
-    update(deltaTime); // <<< CALL UPDATE ONCE HERE
+        // --- Update ---
+        update(deltaTime); // <<< CALL UPDATE ONCE HERE
 
-    // --- DELETE THE FOLLOWING DUPLICATED LINES ---
-    // processInput(); // DELETE
-    // updateTerrain(deltaTime); // DELETE
-    // const collisionDetected = calculateDistanceAndCollision(); // DELETE
-    // if (collisionDetected) { // DELETE
-    //     gameOver("Collision!"); // DELETE
-    //     return; // DELETE
-    // } // DELETE
-    // updateScore(deltaTime); // DELETE
-    // --- END DELETION ---
+        // --- DELETE THE FOLLOWING DUPLICATED LINES ---
+        // processInput(); // DELETE
+        // updateTerrain(deltaTime); // DELETE
+        // const collisionDetected = calculateDistanceAndCollision(); // DELETE
+        // if (collisionDetected) { // DELETE
+        //     gameOver("Collision!"); // DELETE
+        //     return; // DELETE
+        // } // DELETE
+        // updateScore(deltaTime); // DELETE
+        // --- END DELETION ---
 
-    // --- Draw ---
-    ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
-    drawTerrain();
-    drawPlayer();
-    drawDistanceIndicator();
+        // --- Draw ---
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+        drawTerrain();
+        drawPlayer();
+        drawDistanceIndicator();
 
-    // --- Debug --- (Update after drawing calculations)
-    // Make sure updateDebugInfo doesn't rely on variables only set in the duplicated logic block
-    // It should be okay as update() sets the necessary state variables like distanceToTerrain etc.
-     updateDebugInfo(); // Pass necessary args if you kept that modification
+        // --- Debug --- (Update after drawing calculations)
+        // Make sure updateDebugInfo doesn't rely on variables only set in the duplicated logic block
+        // It should be okay as update() sets the necessary state variables like distanceToTerrain etc.
+        updateDebugInfo(); // Pass necessary args if you kept that modification
 
-    // Request next frame
-    animationFrameId = requestAnimationFrame(gameLoop);
-};
+        // Request next frame
+        animationFrameId = requestAnimationFrame(gameLoop);
+    };
 
+    const setupDevControls = () => {
+        const neutralAngleSlider = document.getElementById('dev-neutral-angle');
+        const neutralAngleValue = document.getElementById('dev-neutral-angle-value');
+        const maxDeviationSlider = document.getElementById('dev-max-deviation');
+        const maxDeviationValue = document.getElementById('dev-max-deviation-value');
+        const sensitivitySlider = document.getElementById('dev-sensitivity');
+        const sensitivityValue = document.getElementById('dev-sensitivity-value');
+
+        // Check if elements exist before adding listeners
+        if (!neutralAngleSlider || !maxDeviationSlider || !sensitivitySlider) {
+            console.warn("Dev control elements not found in HTML. Skipping setup.");
+            // Make sure you added the HTML inside the #debug-panel div in index.html
+            return;
+        }
+
+        // Set initial values from the 'let' variables
+        neutralAngleSlider.value = NEUTRAL_TILT_ANGLE_PORTRAIT;
+        neutralAngleValue.textContent = NEUTRAL_TILT_ANGLE_PORTRAIT.toFixed(1);
+        maxDeviationSlider.value = MAX_TILT_DEVIATION;
+        maxDeviationValue.textContent = MAX_TILT_DEVIATION.toFixed(1);
+        sensitivitySlider.value = TILT_SENSITIVITY_MULTIPLIER;
+        sensitivityValue.textContent = TILT_SENSITIVITY_MULTIPLIER.toFixed(2);
+
+        // Add 'input' listeners to update variables when sliders change
+        neutralAngleSlider.addEventListener('input', (e) => {
+            NEUTRAL_TILT_ANGLE_PORTRAIT = parseFloat(e.target.value);
+            neutralAngleValue.textContent = NEUTRAL_TILT_ANGLE_PORTRAIT.toFixed(1);
+            // Also update the landscape one? Or add a separate slider? For now, just portrait.
+            // NEUTRAL_TILT_ANGLE_LANDSCAPE might need separate handling if tuned differently.
+        });
+
+        maxDeviationSlider.addEventListener('input', (e) => {
+            MAX_TILT_DEVIATION = parseFloat(e.target.value);
+            maxDeviationValue.textContent = MAX_TILT_DEVIATION.toFixed(1);
+        });
+
+        sensitivitySlider.addEventListener('input', (e) => {
+            TILT_SENSITIVITY_MULTIPLIER = parseFloat(e.target.value);
+            sensitivityValue.textContent = TILT_SENSITIVITY_MULTIPLIER.toFixed(2);
+        });
+
+        console.log("Dev controls set up."); // Confirmation log
+    };
 
     // --- Initialization ---
     const init = () => {
@@ -872,9 +914,10 @@ const gameLoop = (timestamp) => {
         // Handle window resize
         window.addEventListener('resize', resizeCanvas);
 
+        setupDevControls();
+
         // Set initial state
         resizeCanvas(); // Initial sizing
-        // initializeTerrain(); // Called within startGame now
         startScreen.style.display = 'flex'; // Show start screen initially
          debugPanel.style.display = 'none'; // Hide debug initially
          updateDebugInfo(); // Initial debug state

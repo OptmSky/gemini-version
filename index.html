@@ -61,6 +61,24 @@
         <div id="debug-panel" style="display: none;">
             <h3>Debug Info</h3>
             <pre id="debug-output"></pre>
+            <hr>
+            <h4>Dev Controls (Tilt)</h4>
+            <div>
+                <label for="dev-neutral-angle">Neutral Angle (Portrait):</label>
+                <input type="range" id="dev-neutral-angle" min="0" max="90" step="1" style="width: 70%;">
+                <span id="dev-neutral-angle-value"></span>
+            </div>
+            <div>
+                <label for="dev-max-deviation">Max Deviation:</label>
+                <input type="range" id="dev-max-deviation" min="10" max="90" step="1" style="width: 70%;">
+                <span id="dev-max-deviation-value"></span>
+            </div>
+            <div>
+                <label for="dev-sensitivity">Sensitivity Multi:</label>
+                <input type="range" id="dev-sensitivity" min="0.01" max="0.5" step="0.01" style="width: 70%;">
+                <span id="dev-sensitivity-value"></span>
+            </div>
+             <hr>
             <button id="toggle-debug">Hide Debug</button>
         </div>
         <button id="show-debug-button" style="position: absolute; bottom: 5px; right: 5px; z-index: 100;">Debug</button>
