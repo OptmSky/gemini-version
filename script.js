@@ -46,8 +46,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let TERRAIN_INITIAL_SAFE_FACTOR = 0.6// Start terrain ~1.8x screen height down
     let CONTROL_SENSITIVITY = 1.5; // How much keys/tilt affect terrain bias
     let TILT_SENSITIVITY_MULTIPLIER = 0.25; // Adjusts tilt responsiveness
-    let NEUTRAL_TILT_ANGLE_PORTRAIT = 45.0; // Neutral angle (degrees) when phone held vertically (uses pitch/beta)
-    let NEUTRAL_TILT_ANGLE_LANDSCAPE = 0.0;  // Neutral angle (degrees) when phone held horizontally (uses roll/gamma) - Usually 0 is fine for roll.
+    let NEUTRAL_TILT_ANGLE_PORTRAIT = 30.0; // Neutral angle (degrees) when phone held vertically (uses pitch/beta)
+    let NEUTRAL_TILT_ANGLE_LANDSCAPE = 30.0;  // Neutral angle (degrees) when phone held horizontally (uses roll/gamma) - Usually 0 is fine for roll.
     let MAX_TILT_DEVIATION = 45.0; // Max degrees deviation FROM NEUTRAL angle to reach full effect (-1 to 1 normalized)
     const WARNING_TIME_SECONDS = 10; // When to show time warning
     const INITIAL_SAFE_DURATION_SECONDS = 3.0; // How many seconds of smooth terrain at start
@@ -80,6 +80,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let sensorPermissionGranted = false;
     let isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     let lastBeta = null; // For tilt smoothing/axis detection
+
+    // Color Modes
+    let currentColorMode = 'aviation'; // 'aviation', 'zen', 'proximity'
+    const colorModes = {
+        aviation: { sky: '#345678', ground: '#654321', groundStroke: '#3a240d', player: 'red' },
+        zen: { sky: '#F8F5F1', ground: '#EEE7DD', groundStroke: '#E4D7C3', player: '#E4D7C3' },
+        proximity: { sky: '#4682b4', groundNear: '#ff6347', groundFar: '#3cb371', groundStroke: '#2e8b57', player: '#ffffff' } // Ground color calculated dynamically
+    };
 
     // --- Utility Functions ---
     const resizeCanvas = () => {
@@ -126,6 +134,16 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const lerp = (a, b, t) => a + (b - a) * t; // Linear interpolation
+
+    // Helper function for proximity color interpolation
+    const hexToRgb = (hex) => {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : null;
+    };
 
     const isSecureContext = () => window.isSecureContext; // Check for HTTPS
 
@@ -650,9 +668,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- Drawing ---
+    const drawBackground = () => {
+        const colors = colorModes[currentColorMode];
+        // Draw Sky
+        ctx.fillStyle = colors.sky;
+        ctx.fillRect(0, 0, canvas.width, canvas.height); // Fill entire canvas first
+    };
+
     const drawPlayer = () => {
-        ctx.fillStyle = 'red';
-        ctx.fillRect(player.x - player.width / 2, player.y - player.height / 2, player.width, player.height);
+        const colors = colorModes[currentColorMode];
+        ctx.fillStyle = colors.player;
+        // Draw a circle instead of a rectangle
+        ctx.beginPath();
+        // Use player.width as the diameter, so radius is width / 2
+        ctx.arc(player.x, player.y, player.width / 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Old rectangle code:
+        // ctx.fillRect(player.x - player.width / 2, player.y - player.height / 2, player.width, player.height);
         // Simple triangle shape instead:
         // ctx.fillStyle = 'yellow';
         // ctx.beginPath();
@@ -665,9 +698,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const drawTerrain = () => {
         const baseLineY = canvas.height / 2; // The baseline used for generation
+        const colors = colorModes[currentColorMode];
 
-        ctx.fillStyle = '#654321';
-        ctx.strokeStyle = '#3a240d';
+        // Determine ground fill style based on mode
+        let groundFillStyle;
+        if (currentColorMode === 'proximity') {
+            // Calculate color based on distance (0 to MAX_SCORING_DISTANCE)
+            // Clamp distance for color calculation
+            const clampedDistance = Math.max(0, Math.min(MAX_SCORING_DISTANCE, distanceToTerrain));
+            const proximityFactor = clampedDistance / MAX_SCORING_DISTANCE; // 0 (close) to 1 (far)
+
+            // Interpolate between 'near' and 'far' colors
+            const nearColor = hexToRgb(colors.groundNear);
+            const farColor = hexToRgb(colors.groundFar);
+            if (nearColor && farColor) { // Check if hexToRgb was successful
+                const r = Math.round(lerp(nearColor.r, farColor.r, proximityFactor));
+                const g = Math.round(lerp(nearColor.g, farColor.g, proximityFactor));
+                const b = Math.round(lerp(nearColor.b, farColor.b, proximityFactor));
+                groundFillStyle = `rgb(${r}, ${g}, ${b})`;
+            } else {
+                groundFillStyle = colors.groundFar; // Fallback if color conversion fails
+            }
+
+        } else {
+            groundFillStyle = colors.ground;
+        }
+
+        ctx.fillStyle = groundFillStyle;
+        ctx.strokeStyle = colors.groundStroke;
         ctx.lineWidth = 2;
         ctx.beginPath();
 
@@ -802,7 +860,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- END DELETION ---
 
         // --- Draw ---
-        ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+        // ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas (No longer needed as background fills)
+        drawBackground(); // Draw sky first
         drawTerrain();
         drawPlayer();
         drawDistanceIndicator();
@@ -915,6 +974,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('resize', resizeCanvas);
 
         setupDevControls();
+        setupColorModeControls(); // Add this line
 
         // Set initial state
         resizeCanvas(); // Initial sizing
@@ -923,6 +983,35 @@ document.addEventListener('DOMContentLoaded', () => {
          updateDebugInfo(); // Initial debug state
 
         console.log("Initialization Complete. Ready to Start.");
+    };
+
+    const setupColorModeControls = () => {
+        const colorModeButtons = document.querySelectorAll('#color-mode-controls button');
+        if (!colorModeButtons || colorModeButtons.length === 0) {
+            console.warn("Color mode control buttons not found in HTML. Skipping setup.");
+            return;
+        }
+
+        colorModeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const selectedMode = button.getAttribute('data-mode');
+                if (colorModes[selectedMode]) {
+                    currentColorMode = selectedMode;
+                    console.log(`Color mode changed to: ${currentColorMode}`);
+                    // Optional: Add visual feedback (e.g., highlight active button)
+                    colorModeButtons.forEach(btn => btn.style.border = 'none');
+                    button.style.border = '2px solid #0f0'; // Highlight selected
+                } else {
+                    console.warn(`Invalid color mode selected: ${selectedMode}`);
+                }
+            });
+            // Set initial highlight for the default mode
+            if (button.getAttribute('data-mode') === currentColorMode) {
+                 button.style.border = '2px solid #0f0';
+            }
+        });
+
+        console.log("Color mode controls set up.");
     };
 
     // --- Start Everything ---
