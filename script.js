@@ -46,8 +46,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let TERRAIN_INITIAL_SAFE_FACTOR = 0.6// Start terrain ~1.8x screen height down
     let CONTROL_SENSITIVITY = 1.5; // How much keys/tilt affect terrain bias
     let TILT_SENSITIVITY_MULTIPLIER = 1.0; // Adjusts tilt responsiveness
-    let NEUTRAL_TILT_ANGLE_PORTRAIT = 30.0; // Neutral angle (degrees) when phone held vertically (uses pitch/beta)
-    let NEUTRAL_TILT_ANGLE_LANDSCAPE = 30.0;  // Neutral angle (degrees) when phone held horizontally (uses roll/gamma) - Usually 0 is fine for roll.
+    let NEUTRAL_TILT_ANGLE_PORTRAIT = 50.0; // Neutral angle (degrees) when phone held vertically (uses pitch/beta)
+    let NEUTRAL_TILT_ANGLE_LANDSCAPE = 50.0;  // Neutral angle (degrees) when phone held horizontally (uses roll/gamma)
     let MAX_TILT_DEVIATION = 45.0; // Max degrees deviation FROM NEUTRAL angle to reach full effect (-1 to 1 normalized)
     const WARNING_TIME_SECONDS = 10; // When to show time warning
     const INITIAL_SAFE_DURATION_SECONDS = 3.0; // How many seconds of smooth terrain at start
@@ -285,9 +285,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const normalizedTilt = Math.max(-1, Math.min(1, adjustedTiltValue / MAX_TILT_DEVIATION));
         currentNormalizedTilt = normalizedTilt;
 
-        // Calculate the desired bias offset based on the normalized deviation from neutral
-        // Positive normalizedTilt (tilted "up" from neutral) should increase bias (terrain moves down).
-        const tiltInfluence = normalizedTilt * (canvas.height * 0.4) * TILT_SENSITIVITY_MULTIPLIER;
+        // Apply exponential curve: small tilts = small effect, large tilts = large effect
+        // Using sign-preserving square: keeps direction but squares magnitude
+        const curvedTilt = Math.sign(normalizedTilt) * Math.pow(Math.abs(normalizedTilt), 1.8);
+
+        // Calculate the desired bias offset based on the curved tilt
+        const tiltInfluence = curvedTilt * (canvas.height * 0.4) * TILT_SENSITIVITY_MULTIPLIER;
 
         // Set the target bias directly based on the calculated influence.
         // When tilt is neutral, adjusted=0, normalized=0, influence=0, so target bias becomes 0.
