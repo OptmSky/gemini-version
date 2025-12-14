@@ -41,11 +41,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const POINTS_PER_SECOND_AT_MIN_DIST = 50; // Score rate when extremely close
     let TERRAIN_SEGMENT_WIDTH = 20; // Width of each terrain segment
     let TERRAIN_BASE_SPEED = 2; // Pixels per frame base speed
-    let TERRAIN_SMOOTHNESS = 0.1; // How much adjacent points influence each other
-    let TERRAIN_ROUGHNESS = 100; // Max vertical change between segments
+    let TERRAIN_SMOOTHNESS = 0.7; // Controls fine detail (lower = more jagged detail)
+    let TERRAIN_ROUGHNESS = 80; // Base amplitude for hills (gets multiplied 8x)
     let TERRAIN_INITIAL_SAFE_FACTOR = 0.6// Start terrain ~1.8x screen height down
     let CONTROL_SENSITIVITY = 1.5; // How much keys/tilt affect terrain bias
-    let TILT_SENSITIVITY_MULTIPLIER = 0.25; // Adjusts tilt responsiveness
+    let TILT_SENSITIVITY_MULTIPLIER = 0.5; // Adjusts tilt responsiveness
     let NEUTRAL_TILT_ANGLE_PORTRAIT = 30.0; // Neutral angle (degrees) when phone held vertically (uses pitch/beta)
     let NEUTRAL_TILT_ANGLE_LANDSCAPE = 30.0;  // Neutral angle (degrees) when phone held horizontally (uses roll/gamma) - Usually 0 is fine for roll.
     let MAX_TILT_DEVIATION = 45.0; // Max degrees deviation FROM NEUTRAL angle to reach full effect (-1 to 1 normalized)
@@ -88,6 +88,32 @@ document.addEventListener('DOMContentLoaded', () => {
         zen: { sky: '#F8F5F1', ground: '#EEE7DD', groundStroke: '#E4D7C3', player: '#E4D7C3' },
         proximity: { sky: '#4682b4', groundNear: '#ff6347', groundFar: '#3cb371', groundStroke: '#2e8b57', player: '#ffffff' } // Ground color calculated dynamically
     };
+
+    // --- Perlin Noise for smooth terrain ---
+    const perlin = (() => {
+        const permutation = [];
+        for (let i = 0; i < 256; i++) permutation[i] = i;
+        // Shuffle
+        for (let i = 255; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [permutation[i], permutation[j]] = [permutation[j], permutation[i]];
+        }
+        const p = [...permutation, ...permutation]; // Double it
+
+        const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+        const lerp = (a, b, t) => a + t * (b - a);
+        const grad = (hash, x) => (hash & 1) === 0 ? x : -x;
+
+        return {
+            noise1D: (x) => {
+                const xi = Math.floor(x) & 255;
+                const xf = x - Math.floor(x);
+                const u = fade(xf);
+                return lerp(grad(p[xi], xf), grad(p[xi + 1], xf - 1), u);
+            }
+        };
+    })();
+    let perlinOffset = Math.random() * 1000; // Random starting point for terrain variety
 
     // --- Utility Functions ---
     const resizeCanvas = () => {
@@ -367,6 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Terrain Generation ---
     const initializeTerrain = () => {
         terrainPoints = [];
+        perlinOffset = Math.random() * 1000; // New random terrain each game
         const baseLineY = canvas.height / 2; // Reference baseline is screen center
 
         // Calculate the initial bias needed to place the terrain correctly
@@ -420,15 +447,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // --- End roughness determination ---
     
-        // Add new points on the right edge
+        // Add new points on the right edge using Perlin noise for smooth terrain
         while (lastX < canvas.width + TERRAIN_SEGMENT_WIDTH * 2) {
              lastX += TERRAIN_SEGMENT_WIDTH;
-    
-             // Calculate Y components using EFFECTIVE roughness
-             let randomComponent = (Math.random() - 0.5) * effectiveRoughness; // <<< USE effectiveRoughness
-             let smoothComponent = lastRelativeY * (1 - TERRAIN_SMOOTHNESS);
-             let nextRelativeY = smoothComponent + randomComponent;
-    
+             perlinOffset += 0.015; // Frequency for nice rolling hills
+
+             // Big dramatic hills using multiple sine-like waves
+             const amplitude = effectiveRoughness * 8; // Massive amplitude for exciting terrain
+
+             // Primary wave: big swooping mountains
+             let noiseValue = perlin.noise1D(perlinOffset) * amplitude;
+             // Secondary wave: adds variation to the peaks
+             noiseValue += perlin.noise1D(perlinOffset * 2) * amplitude * 0.4;
+             // Third wave: medium detail
+             noiseValue += perlin.noise1D(perlinOffset * 4) * amplitude * 0.15;
+
+             // Direct use of noise - no dampening blend
+             let nextRelativeY = noiseValue;
+
              terrainPoints.push({ x: lastX, y: nextRelativeY });
              lastRelativeY = nextRelativeY;
         }
@@ -941,6 +977,29 @@ document.addEventListener('DOMContentLoaded', () => {
             TILT_SENSITIVITY_MULTIPLIER = parseFloat(e.target.value);
             sensitivityValue.textContent = TILT_SENSITIVITY_MULTIPLIER.toFixed(2);
         });
+
+        // Terrain controls
+        const roughnessSlider = document.getElementById('dev-roughness');
+        const roughnessValue = document.getElementById('dev-roughness-value');
+        const smoothingSlider = document.getElementById('dev-smoothing');
+        const smoothingValue = document.getElementById('dev-smoothing-value');
+
+        if (roughnessSlider && smoothingSlider) {
+            roughnessSlider.value = TERRAIN_ROUGHNESS;
+            roughnessValue.textContent = TERRAIN_ROUGHNESS;
+            smoothingSlider.value = TERRAIN_SMOOTHNESS;
+            smoothingValue.textContent = TERRAIN_SMOOTHNESS.toFixed(2);
+
+            roughnessSlider.addEventListener('input', (e) => {
+                TERRAIN_ROUGHNESS = parseFloat(e.target.value);
+                roughnessValue.textContent = TERRAIN_ROUGHNESS;
+            });
+
+            smoothingSlider.addEventListener('input', (e) => {
+                TERRAIN_SMOOTHNESS = parseFloat(e.target.value);
+                smoothingValue.textContent = TERRAIN_SMOOTHNESS.toFixed(2);
+            });
+        }
 
         console.log("Dev controls set up."); // Confirmation log
     };
