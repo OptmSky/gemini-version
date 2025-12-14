@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let TERRAIN_ROUGHNESS = 80; // Base amplitude for hills (gets multiplied 8x)
     let TERRAIN_INITIAL_SAFE_FACTOR = 0.6// Start terrain ~1.8x screen height down
     let CONTROL_SENSITIVITY = 1.5; // How much keys/tilt affect terrain bias
-    let TILT_SENSITIVITY_MULTIPLIER = 0.5; // Adjusts tilt responsiveness
+    let TILT_SENSITIVITY_MULTIPLIER = 1.0; // Adjusts tilt responsiveness
     let NEUTRAL_TILT_ANGLE_PORTRAIT = 30.0; // Neutral angle (degrees) when phone held vertically (uses pitch/beta)
     let NEUTRAL_TILT_ANGLE_LANDSCAPE = 30.0;  // Neutral angle (degrees) when phone held horizontally (uses roll/gamma) - Usually 0 is fine for roll.
     let MAX_TILT_DEVIATION = 45.0; // Max degrees deviation FROM NEUTRAL angle to reach full effect (-1 to 1 normalized)
@@ -80,6 +80,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let sensorPermissionGranted = false;
     let isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     let lastBeta = null; // For tilt smoothing/axis detection
+    let currentRawTilt = null; // Current raw tilt angle from device
+    let currentAdjustedTilt = null; // Tilt relative to neutral
+    let currentNormalizedTilt = null; // Normalized -1 to 1
 
     // Color Modes
     let currentColorMode = 'aviation'; // 'aviation', 'zen', 'proximity'
@@ -270,13 +273,17 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // --- NEW: Calculate tilt relative to the desired neutral angle ---
+        // Store raw tilt for debug
+        currentRawTilt = tiltValue;
+
+        // Calculate tilt relative to the desired neutral angle
         let adjustedTiltValue = tiltValue - neutralAngle;
-        // --- END NEW ---
+        currentAdjustedTilt = adjustedTiltValue;
 
         // Normalize the *adjusted* tilt value based on max deviation from neutral
         // e.g., map (-MAX_TILT_DEVIATION to +MAX_TILT_DEVIATION) -> (-1 to 1)
         const normalizedTilt = Math.max(-1, Math.min(1, adjustedTiltValue / MAX_TILT_DEVIATION));
+        currentNormalizedTilt = normalizedTilt;
 
         // Calculate the desired bias offset based on the normalized deviation from neutral
         // Positive normalizedTilt (tilted "up" from neutral) should increase bias (terrain moves down).
@@ -285,9 +292,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Set the target bias directly based on the calculated influence.
         // When tilt is neutral, adjusted=0, normalized=0, influence=0, so target bias becomes 0.
         verticalBiasTarget = tiltInfluence;
-
-        // Update debug info if needed (passing the new values)
-        updateDebugInfo(adjustedTiltValue, normalizedTilt);
     };
 
     const enterFullscreen = () => {
@@ -828,20 +832,15 @@ document.addEventListener('DOMContentLoaded', () => {
      };
 
     // --- Debugging ---
-    const updateDebugInfo = (adjustedTilt = null, normalizedTilt = null) => {
+    const updateDebugInfo = () => {
         if (debugPanel.style.display !== 'none') {
             let sensorData = 'N/A';
-            if (sensorsActive) {
-                // Keep existing beta display or add gamma if needed
-                sensorData = `Permission: ${sensorPermissionGranted}\nActive: ${sensorsActive}\nBeta (Pitch): ${event?.beta?.toFixed(2) ?? 'N/A'}\nGamma (Roll): ${event?.gamma?.toFixed(2) ?? 'N/A'}`; // Use optional chaining safely
-
-                // Add the new debug info
-                if (adjustedTilt !== null) {
-                    sensorData += `\nAdjusted Tilt: ${adjustedTilt.toFixed(2)}`;
-                }
-                if (normalizedTilt !== null) {
-                    sensorData += `\nNormalized Tilt: ${normalizedTilt.toFixed(2)}`;
-                }
+            if (sensorsActive && currentRawTilt !== null) {
+                sensorData = `Permission: ${sensorPermissionGranted}
+Active: ${sensorsActive}
+Raw Tilt Angle: ${currentRawTilt?.toFixed(1) ?? 'N/A'}°
+Adjusted (from neutral): ${currentAdjustedTilt?.toFixed(1) ?? 'N/A'}°
+Normalized: ${currentNormalizedTilt?.toFixed(2) ?? 'N/A'}`;
             } else {
                 sensorData = `Permission: ${sensorPermissionGranted}\nActive: ${sensorsActive}\nStatus: ${sensorStatusDisplay.textContent}`;
             }

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nIncrease default sensitivity to 1.0 and fix tilt debug display\n\n- Set TILT_SENSITIVITY_MULTIPLIER default to 1.0\n- Add global variables to track current tilt values\n- Fix debug panel to correctly show raw tilt angle, adjusted, and normalized values\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")"
+    ]
+  }
+}
