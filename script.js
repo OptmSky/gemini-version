@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let TERRAIN_SEGMENT_WIDTH = 20; // Width of each terrain segment
     let TERRAIN_BASE_SPEED = 2; // Pixels per frame base speed
     let TERRAIN_SMOOTHNESS = 0.1; // How much adjacent points influence each other
-    let TERRAIN_ROUGHNESS = 50; // Max vertical change between segments
+    let TERRAIN_ROUGHNESS = 100; // Max vertical change between segments
     let TERRAIN_INITIAL_SAFE_FACTOR = 0.6// Start terrain ~1.8x screen height down
     let CONTROL_SENSITIVITY = 1.5; // How much keys/tilt affect terrain bias
     let TILT_SENSITIVITY_MULTIPLIER = 0.25; // Adjusts tilt responsiveness
@@ -734,19 +734,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Calculate the effective Y for the first point by applying baseline and current bias
             let firstEffectiveY = baseLineY + terrainPoints[0].y + verticalBias;
-            ctx.lineTo(terrainPoints[0].x, Math.min(canvas.height + 50, firstEffectiveY)); // Clamp drawing below screen bottom
+            // --- SMOOTHER CURVE DRAWING ---
+            let p0x = terrainPoints[0].x;
+            let p0y = baseLineY + terrainPoints[0].y + verticalBias;
+            ctx.lineTo(p0x, Math.min(canvas.height + 50, p0y)); // Line to the first actual point's vertical position
 
-            // Draw line segments connecting terrain points, applying baseline and current bias to each
-            for (let i = 0; i < terrainPoints.length; i++) {
-                let effectiveY = baseLineY + terrainPoints[i].y + verticalBias;
-                ctx.lineTo(terrainPoints[i].x, Math.min(canvas.height + 50, effectiveY));
+            // Iterate through points to draw quadratic curves
+            for (let i = 0; i < terrainPoints.length - 1; i++) {
+                const p1x = terrainPoints[i].x;
+                const p1y = baseLineY + terrainPoints[i].y + verticalBias;
+                const p2x = terrainPoints[i + 1].x;
+                const p2y = baseLineY + terrainPoints[i + 1].y + verticalBias;
+
+                // Calculate midpoint for the curve endpoint
+                const midX = (p1x + p2x) / 2;
+                const midY = (p1y + p2y) / 2;
+
+                // Use p1 as the control point, draw curve to the midpoint
+                // Clamp Y values to prevent drawing above the bottom edge visually
+                ctx.quadraticCurveTo(p1x, Math.min(canvas.height + 50, p1y), midX, Math.min(canvas.height + 50, midY));
             }
 
-            // Go to the bottom right corner to close the shape for filling
-            if (terrainPoints.length > 0) {
-                 // Use the X of the last point, but ensure Y goes way down
-                ctx.lineTo(terrainPoints[terrainPoints.length - 1].x, canvas.height + 50);
+            // Draw the last segment as a line to the final point to ensure it reaches the edge
+            if (terrainPoints.length > 1) {
+                 const lastPointX = terrainPoints[terrainPoints.length - 1].x;
+                 const lastPointY = baseLineY + terrainPoints[terrainPoints.length - 1].y + verticalBias;
+                 ctx.lineTo(lastPointX, Math.min(canvas.height + 50, lastPointY));
+                 // Line to bottom right corner for fill
+                 ctx.lineTo(lastPointX, canvas.height + 50);
+            } else if (terrainPoints.length === 1) {
+                 // If only one point, line to bottom right from that point
+                 ctx.lineTo(p0x, canvas.height + 50);
             }
+            // --- END SMOOTHER CURVE DRAWING ---
+
+            // Go to the bottom right corner to close the shape for filling (handled slightly differently above)
+            // if (terrainPoints.length > 0) { // This specific line is now redundant
+            //      // Use the X of the last point, but ensure Y goes way down
+            //     ctx.lineTo(terrainPoints[terrainPoints.length - 1].x, canvas.height + 50);
+            // }
             ctx.lineTo(-TERRAIN_SEGMENT_WIDTH * 2, canvas.height + 50); // Back to bottom left
             ctx.closePath();
             ctx.fill();
